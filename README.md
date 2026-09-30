@@ -16,6 +16,75 @@
 
 下载 Release 资产后，按其压缩包内的目录结构解压到仓库根目录，或使用 `LAYA_TRT_ONNX_ROOT` 指向包含 `Assets/onnx` 的目录。每个 Release 都附带 SHA-256 校验文件；下载后请先校验再运行。
 
+## 性能对比：本项目 vs 原版 laya（PyTorch）
+
+同一台机器、同一套权重、同一组用例、同一组问题，只换推理引擎。
+
+**测试环境**
+
+| 项 | 值 |
+|---|---|
+| GPU | NVIDIA GeForce RTX 5070 Ti Laptop GPU（12227 MiB） |
+| 驱动 / CUDA | `616.92` / CUDA 13.x（`torch 2.14.0+cu130`） |
+| 原版 | PyTorch `2.14.0` eager 前向 + AMP fp16，`transformers 5.17.0` |
+| 本项目 | Go `1.27.0`、TensorRT `10.16`、ONNX Runtime `1.28.0`（CUDA）/ `1.24.4`（DirectML） |
+| 测量时间 | 2026-09-29 ～ 09-30 |
+
+用例是 `bench/autobench` 与 `laya/research/scripts/bench_auto.py` **共用**的 4 条英文工单（`en_billing`、`en_technical`、`en_sales`、`en_hr`，输入约 121–131 token），问题集相同（`dept` 四选一 + `refund` noul）。Go 侧每个用例 `-reps 100`，Python 侧 `--reps 50`，各自先预热 5 次。
+
+### 短输入（约 120–130 token）
+
+| 推理后端 | p50 | p95 | p99 | 相对原版 |
+|---|---:|---:|---:|---:|
+| 原版 laya · PyTorch eager + AMP fp16 | 23.6 ms | 26.4 ms | 27.5 ms | 1.0× |
+| 本项目 · TensorRT 10.16 fp16 | **4.1 ms** | 4.8 ms | 5.0 ms | **5.8× 快** |
+| 本项目 · ONNX Runtime CUDA fp16 | **8.1 ms** | 13.2 ms | 14.4 ms | **2.9× 快** |
+| 本项目 · ONNX Runtime DirectML | 96.0 ms | 110.9 ms | 122.1 ms | 4.1× 慢 |
+| 本项目 · ONNX Runtime CPU | 1032 ms | 1180 ms | 1667 ms | 44× 慢 |
+
+表内是 4 条用例各自分位数的平均。TensorRT 用的是 `engines\laya_s8192_fp16_p2.engine`，ONNX 用的是 `onnx\laya_ctx8192.opt.fp16.onnx`（CPU 档用未融合的 `laya_ctx8192.onnx`，fp16 在 CPU provider 上更慢）。
+
+### 长输入（1024 token）
+
+| 推理后端 | p50 | 说明 |
+|---|---:|---|
+| 原版 laya · PyTorch | 36.7 ms | ⚠️ 只能跑 multilingual checkpoint，不是同一套权重 |
+| 本项目 · TensorRT fp16 | **17.8 ms** | english 权重，超出其训练值 512 |
+| 本项目 · ONNX Runtime CUDA fp16 | 28.7 ms | 同上 |
+| 本项目 · ONNX Runtime DirectML | 208.9 ms | 同上 |
+| 本项目 · ONNX Runtime CPU | 7802.8 ms | 同上 |
+
+原版 english checkpoint 的 `max_len=512`，PyTorch 侧对 1024 token 直接 `SKIP above max_len 512`；这一行的原版数字来自 multilingual checkpoint，所以**长输入这组不是严格的同权重对比**，只说明量级。本项目按[上下文与选项上限](#上下文与选项上限)刻意允许外推到训练值之外，这是原版路径做不到的。
+
+### 结论
+
+- **差距主要来自推理引擎，不是模型**：TensorRT 比 PyTorch eager 快约 5.8×，ONNX Runtime CUDA 快约 2.9×。
+- **长度越长，优势越小**：1024 token 时计算本身占主导，TensorRT 只快约 2.1×（PyTorch 那侧本来也只从 23.6 ms 涨到 36.7 ms）。
+- **DirectML 和 CPU 档比原版慢**，它们不是性能选项，而是没有 TensorRT/CUDA 时的可用性回退。
+- **决策一致**：四种后端在 5 条用例上全部 PASS，原版在 4 条用例上全部 PASS，选中的部门和退款判断相同；fp16 下概率有 ±0.01 量级漂移（见 [bench/REPORT.md](bench/REPORT.md) §5）。
+- **加载更快**：engine 反序列化 1.5–3.7 s，而原版 preload 一个 checkpoint 用了 16.2 s（含 HuggingFace 缓存校验，两者不是完全等价的操作）。
+
+### 复现
+
+```powershell
+# 原版（在 laya 仓库内）
+uv run python research/scripts/bench_auto.py --device cuda --amp fp16 --models english --reps 50
+uv run python research/scripts/bench_auto.py --device cuda --amp fp16 --tokens 128,512,1024 --token-only
+
+# 本项目（仓库根目录，四种后端分别跑）
+go run ./bench/autobench -reps 100 -log bench\autobench.log -engines onnx-cpu
+go run ./bench/autobench -reps 100 -log bench\autobench.log -engines onnx-directml
+go run ./bench/autobench -reps 100 -log bench\autobench.log -engines onnx
+go run ./bench/autobench -reps 100 -log bench\autobench.log -engines trt
+```
+
+读数时注意：
+
+- 两侧都是单次测量（Go 每用例 100 次、Python 每用例 50 次呼叫），没有跨会话重复。笔记本 GPU 受功耗和温度影响，**绝对毫秒数会变，倍数关系比绝对值稳**。
+- Python 侧是 eager 前向，没有 `torch.compile`、没有 TensorRT 执行后端。这组数字说明的是「launcher 自带的编译/融合路径」与「原版默认路径」的差距，不是「laya 模型慢」。
+- Python 侧 `--reps 50` 的 p99 不稳定，脚本自己也会提示 `P99 needs >= 100`；用 p50 比较更可靠。
+- 两侧 `usage.input_tokens` 在同一条用例上相差 2（本项目把 dict state 序列化成紧凑 JSON，原版 `serialize_state` 保留 `": "` 里的空格，每条问题行差 1 token）。这没有改变任何用例的判定结果，但确实是与原版参考实现的差异：分词器和序列构造的 parity 测试只覆盖已序列化好的字符串，不覆盖这一步。
+
 ## 许可证与署名
 
 本项目不是 MIT/Apache 等允许任意再分发的开源许可证。源代码仅授权用于个人学习、学术研究和内部非商业评估；发表论文、报告或基于本项目的研究成果时，必须明确引用本项目并保留作者与仓库链接。任何商业部署、SaaS、产品集成、镜像分发或衍生发行版，都需要事先取得作者书面许可。
@@ -461,6 +530,8 @@ pwsh -File bench\serve.ps1 -Engine engines\laya_s512_fp16_b8.engine -Port 8471
 
 `apibench` 的两个拟合值最有用：**固定开销/次前向**（约 7 ms）和**每 token 边际成本**（约 0.012 ms）。
 前者远大于后者，说明这个模型的瓶颈是前向次数而不是序列长度，合批比缩短输入更有效。
+
+`bench/autobench` 是 `laya/research/scripts/bench_auto.py` 的 Go 对应物，两者共用同一组用例和问题集，所以可以直接和原版 PyTorch 比。四档后端的对比数字见上文[性能对比](#性能对比本项目-vs-原版-layapytorch)。
 
 ### 端口被占用
 
