@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Laya Server 控制台</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="dot" id="dot"></span><strong>Laya Server</strong><span class="muted" id="ver"></span></div>
+  <div class="chips" id="chips"></div>
+  <label class="token">Admin token <input id="token" type="password" autocomplete="off" placeholder="未设置则留空"></label>
+</header>
+
+<main class="grid">
+  <section class="card" aria-labelledby="h-run">
+    <h2 id="h-run">当前运行</h2>
+    <dl class="kv" id="run"></dl>
+    <div class="row">
+      <button id="btn-auto" class="primary">按回退链重新加载</button>
+      <button id="btn-unload">卸载</button>
+    </div>
+    <h3>最近一次加载</h3>
+    <ol class="attempts" id="attempts"></ol>
+  </section>
+
+  <section class="card" aria-labelledby="h-cfg">
+    <h2 id="h-cfg">基础配置</h2>
+    <form id="cfg" class="form">
+      <label>目标上下文 <input name="model_seq" type="number" min="64" max="8192" step="64"></label>
+      <label>后端
+        <select name="backend"><option value="auto">auto（回退链）</option><option value="tensorrt">tensorrt</option><option value="onnx">onnx</option></select>
+      </label>
+      <label>ONNX provider（后端为 onnx 时）
+        <select name="provider"><option value="">默认</option><option>cuda</option><option>directml</option><option>cpu</option></select>
+      </label>
+      <fieldset>
+        <legend>回退链（勾选并排序）</legend>
+        <ul id="chain" class="chain"></ul>
+      </fieldset>
+      <label>固定模型路径（可空） <input name="engine_path" placeholder="留空自动选择"></label>
+      <label>引擎精度 <select name="precision"><option>fp16</option><option>fp32</option></select></label>
+      <label class="check"><input name="auto_convert" type="checkbox"> 没有匹配引擎时自动用 trtexec 转换</label>
+      <label>TensorRT context 数（0=按显存） <input name="contexts" type="number" min="0" max="16"></label>
+      <label>额外模型目录（每行一个） <textarea name="model_dirs" rows="2"></textarea></label>
+      <label>引擎输出目录 <input name="engine_dir" placeholder="默认 engines/"></label>
+      <label>监听地址（重启生效） <input name="http_addr"></label>
+      <div class="row">
+        <button type="submit" class="primary">保存并重新加载</button>
+        <button type="button" id="btn-save">仅保存</button>
+        <button type="button" id="btn-defaults">恢复默认</button>
+      </div>
+      <p class="muted" id="cfg-path"></p>
+    </form>
+  </section>
+
+  <section class="card wide" aria-labelledby="h-models">
+    <h2 id="h-models">模型</h2>
+    <div class="row">
+      <button id="btn-rescan">重新扫描</button>
+      <button id="btn-convert">构建 TensorRT 引擎</button>
+      <span class="muted" id="conv-state"></span>
+    </div>
+    <pre class="log" id="conv-log" hidden></pre>
+    <table class="tbl">
+      <thead><tr><th>文件</th><th>格式</th><th>seq</th><th>batch</th><th>精度</th><th>大小</th><th></th></tr></thead>
+      <tbody id="models"></tbody>
+    </table>
+    <p class="muted" id="dirs"></p>
+  </section>
+
+  <section class="card wide" aria-labelledby="h-try">
+    <h2 id="h-try">试一下</h2>
+    <form id="try" class="form">
+      <label>文本 <textarea name="state" rows="3">I was charged twice for my subscription this month and want my money back.</textarea></label>
+      <label>问题 JSON <textarea name="questions" rows="6" spellcheck="false">{
+  "department": {"type": "choice", "instructions": "Which team should handle this ticket?",
+    "criteria": {"billing": "payments, refunds", "technical": "bugs, outages", "sales": "pricing, plans"}},
+  "refund": {"type": "noul", "instructions": "Is the customer asking for a refund?"}
+}</textarea></label>
+      <div class="row"><button type="submit" class="primary">预测</button><span class="muted" id="try-time"></span></div>
+    </form>
+    <pre class="log" id="try-out"></pre>
+  </section>
+</main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="app.js"></script>
+</body>
+</html>

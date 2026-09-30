@@ -1,0 +1,30 @@
+Laya Go Launcher Research and Non-Commercial License v1.0
+
+Copyright (c) 2026 Ling0727-ai / Lingxin. All rights reserved.
+
+1. Permission is granted to any individual to view, copy, build, and modify the
+   source code solely for personal learning, academic research, teaching, and
+   internal non-commercial evaluation.
+
+2. Any publication, presentation, report, benchmark, or derivative research
+   result based materially on this project must provide visible attribution to
+   Laya Go Launcher, identify the author, link to the official repository, and
+   cite CITATION.cff when applicable.
+
+3. Without prior written permission from the copyright holder, no person or
+   organization may use this project or a derivative work for commercial
+   purposes, paid services, production deployment, SaaS, resale, redistribution,
+   packaged binaries, or removal of copyright and attribution notices.
+
+4. This license applies only to original source code authored for Laya Go
+   Launcher. It does not grant rights to model weights, exported ONNX files,
+   TensorRT engines, ONNX Runtime binaries, CUDA, TensorRT, DirectML, Wails,
+   React, or any other third-party component. Those components remain subject
+   to their own licenses and terms; see NOTICE.md and docs/dependencies.md.
+
+5. The source code is provided "AS IS", without warranty of any kind. The
+   copyright holder is not liable for any claim, damages, or other liability
+   arising from use of the source code.
+
+For commercial licensing, redistribution permission, or a license exception,
+contact the copyright holder before use.

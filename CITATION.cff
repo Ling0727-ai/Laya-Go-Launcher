@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+title: "Laya Go Launcher"
+type: software
+version: 0.1.0
+date-released: 2026-09-30
+abstract: "A model loading and inference launcher for laya with TensorRT and ONNX Runtime backends."
+repository-code: "https://github.com/Ling0727-ai/Laya-Go-Launcher"
+license: "LicenseRef-Laya-Go-Launcher-Research-NonCommercial-1.0"
+authors:
+  - family-names: "Ling"
+    given-names: "Xin"
+    alias: "Ling0727-ai"
+keywords:
+  - laya
+  - model launcher
+  - TensorRT
+  - ONNX Runtime
+  - Go

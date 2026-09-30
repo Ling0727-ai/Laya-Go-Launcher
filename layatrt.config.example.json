@@ -1,0 +1,11 @@
+{
+  "engine_path": "",
+  "model_config_path": "",
+  "tokenizer_path": "",
+  "http_addr": "127.0.0.1:8420",
+  "contexts": 0,
+  "max_len": 0,
+  "head_max_len": 0,
+  "pad_len": 0,
+  "diagnostics": false
+}

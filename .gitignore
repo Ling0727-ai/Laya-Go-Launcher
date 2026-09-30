@@ -1,0 +1,64 @@
+# 构建产物
+/build/
+/doctor.exe
+/layatrt-server.exe
+/cmd/layatrt-gui/build/bin/
+/cmd/layatrt-gui/frontend/dist/
+/cmd/layatrt-gui/frontend/node_modules/
+/cmd/layatrt-gui/frontend/wailsjs/
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# ONNX Runtime 发布包（CUDA/DirectML），体积大，本地放置
+/Assets/onnx/
+
+# 模型与引擎：体积大，按需自行生成，不入库
+*.engine
+*.onnx
+*.safetensors
+
+# Release 打包临时目录（最终资产通过 GitHub Release 上传）
+/release-staging/
+*.zip
+SHA256SUMS.txt
+
+# 本地实验输出、私有路径清单和缓存
+/_scratch_verify/
+/engines/
+/engines-fp32/
+/bench/*.json
+*.log
+*.tmp
+*.pyc
+__pycache__/
+/final.png
+/dv.txt
+/dve.txt
+/g1.txt
+/t1.txt
+/t1e.txt
+/srv.log
+/srv.err
+/cmd/layatrt-gui/*.txt
+/cmd/layatrt-gui/frontend/package.json.md5
+/cmd/layatrt-gui/frontend/pv*.txt
+
+# 本地配置与密钥
+layatrt.config.json
+.env
+.env.*
+*.token
+hf_token*
+
+# 编辑器与系统
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
