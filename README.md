@@ -8,13 +8,13 @@
 
 ## 发布内容
 
-源码仓库只包含程序源码、构建脚本、测试和配置模板。由于 GitHub 普通 Git 提交不适合数 GB 模型和运行时 DLL，预构建依赖与模型通过 GitHub Releases 提供：
+源码仓库只包含程序源码、构建脚本、测试和配置模板，不包含运行推理所需的大文件。下载入口为 [GitHub Releases](https://github.com/Ling0727-ai/Laya-Go-Launcher/releases)，以对应 Release 实际发布的资产为准：
 
-- `onnx-runtime-windows-x64.zip`：`Assets/onnx` 下的 CUDA 12、CUDA 13 和 DirectML 运行时 DLL
-- `laya-models-onnx.zip`：作者导出的 ONNX 模型
-- `laya-engines-windows-x64.zip`：可选的 TensorRT engine；engine 与 GPU、TensorRT 版本相关，优先自行构建
+- `onnx-runtime-windows-x64.zip`：ONNX Runtime 运行时包，提供 `onnxruntime.dll` 和 provider DLL；**不是模型**。
+- `laya-models-onnx.zip` 或单独的 `laya_ctx8192*.onnx`：导出的 ONNX 模型，放入根目录 `onnx/`。
+- `laya-engines-windows-x64.zip`：可选 TensorRT engine，放入根目录 `engines/`；与 GPU、TensorRT 版本相关，优先自行构建。
 
-下载 Release 资产后，按其压缩包内的目录结构解压到仓库根目录，或使用 `LAYA_TRT_ONNX_ROOT` 指向包含 `Assets/onnx` 的目录。每个 Release 都附带 SHA-256 校验文件；下载后请先校验再运行。
+下载后先与 Release 的 `SHA256SUMS.txt` 比对哈希。尚未发布对应资产时，运行时可从 Microsoft 官方获取，模型可自行导出，详见 [本地依赖与模型准备](docs/local-assets.md)。下面的[首次配置](#首次配置onnx-路径)给出实际目录和可直接修改的配置示例。
 
 ## 性能对比：本项目 vs 原版 laya（PyTorch）
 
@@ -104,13 +104,132 @@ Windows x64 是当前支持平台。完整 TensorRT 后端需要：
 
 仅运行 `layatrt-doctor` 或编译不依赖本机 CUDA 的 Go 包时，不需要安装完整 GPU 环境。第三方依赖的来源、版本和许可证见 [docs/dependencies.md](docs/dependencies.md)。
 
-## 配置
+## 首次配置：ONNX 路径
 
-复制配置模板并按机器路径调整：
+以下步骤在**仓库根目录**执行。先区分三个东西：`.onnx` 是模型，`onnxruntime.dll` 是运行这个模型的第三方运行时，`layatrt_onnx.dll` 是本项目的桥接库。三者都准备好才能执行 ONNX 推理；`.engine` 则是 TensorRT 的模型格式，不是 ONNX Runtime 安装包。
+
+### 1. 基础模型放在哪里
+
+把 `laya_ctx8192.onnx` 直接放到 `onnx/`，不要放到 `Assets/onnx/`。优化版本可放在同一目录，不需要全部下载。普通 FP32 图是 CPU 推理和 TensorRT 转换的基础版本，GPU 可选择 FP16 优化图。
+
+```text
+仓库根目录/
+  onnx/
+    laya_ctx8192.onnx
+    laya_ctx8192.opt.onnx          # 可选：ORT 优化图
+    laya_ctx8192.opt.fp16.onnx     # 可选：GPU FP16 优化图
+```
+
+若下载的是模型压缩包，先看包内结构：已经包含 `onnx/` 的压缩包解压到仓库根目录；只有模型文件的压缩包解压到 `onnx/`。最终路径应为 `onnx/laya_ctx8192.onnx`，不要多套一层 `onnx/onnx/`。如果模型引用了 `.data` 等外部权重，必须一起放好并保留相对目录结构。
+
+### 2. ONNX Runtime 解压到哪里
+
+只准备要使用的 provider 即可。项目 Release 的 `onnx-runtime-windows-x64.zip` 包含 `Assets/onnx/` 目录，**解压到仓库根目录**：
+
+```powershell
+Get-FileHash .\onnx-runtime-windows-x64.zip -Algorithm SHA256
+# 与 Release 的 SHA256SUMS.txt 比对后再解压
+Expand-Archive .\onnx-runtime-windows-x64.zip -DestinationPath .
+```
+
+如果下载的是 Microsoft 官方原始包，将完整包解压到下面对应的 provider 目录，保留版本目录以及 `lib/` 或 `runtimes/` 层级。最终 DLL 路径示例如下：
+
+```text
+仓库根目录/
+  Assets/onnx/
+    cuda12/<CUDA12包目录>/lib/onnxruntime.dll
+    cuda13/<CUDA13包目录>/lib/onnxruntime.dll
+    directml/<DirectML包目录>/runtimes/win-x64/native/onnxruntime.dll
+    cpu/<CPU包目录>/lib/onnxruntime.dll
+  build/bin/Release/
+    layatrt_onnx.dll              # 本项目构建的桥接库，不在 Microsoft 包里
+```
+
+CUDA 包要同时保留 `onnxruntime_providers_shared.dll`、`onnxruntime_providers_cuda.dll`，并安装匹配的 CUDA/cuDNN；DirectML 包要保留 `DirectML.dll`。不要只复制 `onnxruntime.dll`。具体下载来源和版本要求见 [本地依赖与模型准备](docs/local-assets.md)。
+
+`layatrt_onnx.dll` 由下面的命令生成到 `build/bin/Release/`，SDK 安装位置不是默认路径时显式传入：
+
+```powershell
+.\build.ps1 -TensorRTRoot 'C:\TensorRT-10.16.0.72' -CudaRoot 'C:\CUDA'
+```
+
+该脚本构建两个原生后端，需要 Visual Studio C++ Build Tools、CMake、TensorRT 和 CUDA SDK；**CPU/DirectML 推理本身不需要 TensorRT/CUDA，但运行时包不能代替桥接库**。现有构建脚本仍要求这两个 SDK，即使只打算运行 ONNX。
+
+### 3. 分词器和模型配置
+
+这两项也必需，不能只下载 `.onnx`。下面使用根目录 checkpoint 的分词器和校准配置：
+
+```powershell
+python -m pip install huggingface_hub
+hf download convaiinnovations/laya --include "tokenizer/*" "rl_agent_config.json"
+```
+
+启动器会查找默认 Hugging Face 缓存。模型来自其他 checkpoint/subfolder/revision 时，要使用与它匹配的 `rl_agent_config.json`，不能混用 English 与 multilingual 配置。自定义缓存目录时，在下面配置里填写完整路径。
+
+### 4. 写入本地配置并启动
 
 ```powershell
 Copy-Item .\layatrt.config.example.json .\layatrt.config.json
 ```
+
+首次验证建议固定 ONNX 后端，避免自动转换 TensorRT 或切换其他后端。将本地 `layatrt.config.json` 改为以下内容；此例使用 **CPU + 普通 FP32 模型**，便于先确认路径，CPU 推理会比较慢：
+
+```json
+{
+  "engine_path": "onnx/laya_ctx8192.onnx",
+  "backend": "onnx",
+  "provider": "cpu",
+  "onnx_runtime_path": "",
+  "onnx_bridge_path": "build/bin/Release/layatrt_onnx.dll",
+  "tokenizer_path": "",
+  "model_config_path": "",
+  "auto_convert": false,
+  "http_addr": "127.0.0.1:8420"
+}
+```
+
+`onnx_runtime_path` 留空会按上述目录自动发现；`tokenizer_path` 和 `model_config_path` 留空会查找默认 Hugging Face 缓存。构建 Go 服务需要 Go 和可用的 cgo C 编译器（例如 mingw-w64 的 `gcc`），不能仅安装 MSVC：
+
+```powershell
+$env:CGO_ENABLED = '1'
+go build -o doctor.exe ./cmd/layatrt-doctor
+go build -o layatrt-server.exe ./cmd/layatrt-server
+.\run.ps1 -Server
+```
+
+如果 `doctor` 因未安装 TensorRT 等未使用的后端依赖而拦截，但上述 ONNX 模型、分词器、Runtime 与桥接库均已齐全，可用 `run.ps1 -Server -NoCheck` 跳过通用自检；加载 ONNX 时仍会报告实际缺失的依赖。
+
+访问 `http://127.0.0.1:8420/api/v1/health` 查看实际加载的模型和 provider。改用 NVIDIA GPU 时设置 `provider` 为 `cuda`，可将 `engine_path` 改为 `onnx/laya_ctx8192.opt.fp16.onnx`；改用 DirectML 时设置为 `directml`，并准备对应的 Runtime 包。完成验证后，需要自动选择后端时再将 `backend` 改为 `auto`，需要后台构建 TensorRT 时再开启 `auto_convert`。
+
+### 5. 文件放在仓库外怎么办
+
+模型和 DLL 可以放在其他磁盘。JSON 中使用正斜杠或转义后的反斜杠，例如：
+
+```json
+{
+  "engine_path": "D:/laya/onnx/laya_ctx8192.onnx",
+  "backend": "onnx",
+  "provider": "cuda",
+  "onnx_runtime_path": "",
+  "onnx_bridge_path": "D:/laya/bin/layatrt_onnx.dll",
+  "tokenizer_path": "D:/laya/checkpoint/tokenizer/tokenizer.json",
+  "model_config_path": "D:/laya/checkpoint/rl_agent_config.json",
+  "auto_convert": false
+}
+```
+
+若 Runtime 位于 `D:/laya/Assets/onnx/`，启动前设置：
+
+```powershell
+$env:LAYA_TRT_ONNX_ROOT = 'D:\laya'
+.\run.ps1 -Server
+```
+
+变量值是包含 `Assets/onnx/` 的目录 `D:/laya`，**不是** `D:/laya/Assets/onnx`。如果不采用该目录结构，就在 `onnx_runtime_path` 中直接写 `onnxruntime.dll` 的完整路径。固定 DLL 后不会随 provider 切换包，需要 CUDA/DirectML 切换时建议留空。
+
+## 配置
+
+首次安装按上面的步骤准备；配置文件默认从当前工作目录读取，因此推荐在仓库根目录启动。`LAYA_TRT_CONFIG` 可指定其他配置文件。
 
 常用配置项：
 
@@ -552,7 +671,7 @@ Get-NetTCPConnection -LocalPort 8420 -State Listen |
 
 ## 准备模型
 
-需要两样东西：**tokenizer**（自动找）和 **engine**（必须自己编译）。
+推理需要 **tokenizer + 匹配的模型配置 + 一个模型文件**。模型文件可以是 ONNX `.onnx`，也可以是 TensorRT `.engine`，**使用 ONNX 时不需要先编译 TensorRT engine**。模型放 `onnx/`、Runtime 放 `Assets/onnx/<provider>/` 的完整步骤见[首次配置](#首次配置onnx-路径)，下载和导出来源见[本地依赖与模型准备](docs/local-assets.md)。
 
 ### tokenizer
 
@@ -570,9 +689,9 @@ huggingface-cli download convaiinnovations/laya --include "tokenizer/*" "rl_agen
 
 `rl_agent_config.json` 也要——它带着**校准温度**。少了它概率就不准（见[故障排查](#概率看起来不对)）。
 
-### engine
+### TensorRT engine（可选）
 
-两步：导出 ONNX，再编译成 engine。
+仅在使用 TensorRT 后端时需要。两步：先导出普通 ONNX，再编译成 engine；把输出 `.engine` 放到仓库根目录 `engines/`，或通过 `engine_path` 指定它。GPU 或 TensorRT 版本变化后可能需要重新构建。
 
 ```powershell
 # 1. 导出 ONNX（仓库自带脚本，会自动验证跨长度一致性）

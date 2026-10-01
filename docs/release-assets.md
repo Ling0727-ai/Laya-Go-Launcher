@@ -4,6 +4,12 @@ Large files are intentionally distributed as GitHub Release assets instead of Gi
 The source repository remains reviewable and cloneable without downloading GPU runtimes or
 model weights.
 
+For exact directory layouts, provider selection, tokenizer/config downloads, and generation
+commands, see [本地依赖与模型准备](local-assets.md) and the
+[README first-time setup](../README.md#首次配置onnx-路径).
+Runtime DLLs belong under `Assets/onnx/<provider>/`; ONNX models belong under `onnx/`;
+TensorRT plans belong under `engines/`. These are different assets, not interchangeable packages.
+
 ## Expected assets
 
 - `onnx-runtime-windows-x64.zip`: unpack at the repository root; contains `Assets/onnx/`
