@@ -153,7 +153,13 @@ CUDA 包要同时保留 `onnxruntime_providers_shared.dll`、`onnxruntime_provid
 .\build.ps1 -TensorRTRoot 'C:\TensorRT-10.16.0.72' -CudaRoot 'C:\CUDA'
 ```
 
-该脚本构建两个原生后端，需要 Visual Studio C++ Build Tools、CMake、TensorRT 和 CUDA SDK；**CPU/DirectML 推理本身不需要 TensorRT/CUDA，但运行时包不能代替桥接库**。现有构建脚本仍要求这两个 SDK，即使只打算运行 ONNX。
+默认构建两个原生后端，需要 Visual Studio C++ Build Tools、CMake、TensorRT 和 CUDA SDK。仅使用 ONNX 时可以独立构建桥接库，无需 TensorRT/CUDA SDK：
+
+```powershell
+.\build.ps1 -OnnxOnly
+```
+
+也可直接用 CMake 配置 `-DBUILD_TENSORRT=OFF -DBUILD_ONNX=ON`；只构建 TensorRT 则设置 `-DBUILD_ONNX=OFF`。**CPU/DirectML 推理本身不需要 TensorRT/CUDA，但运行时包不能代替桥接库**；ONNX 独立构建仍需要 `onnxruntime_c_api.h`，CUDA provider 运行时仍需匹配的 CUDA/cuDNN。
 
 ### 3. 分词器和模型配置
 

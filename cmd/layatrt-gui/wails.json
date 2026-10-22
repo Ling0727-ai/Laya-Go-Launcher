@@ -10,7 +10,7 @@
   },
   "info": {
     "productName": "Laya Go Launcher",
-    "productVersion": "0.1.0",
+    "productVersion": "0.2.0",
     "comments": "Typed decisions over any state, on TensorRT"
   }
 }

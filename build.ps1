@@ -2,13 +2,14 @@
 #
 #   .\build.ps1
 #   .\build.ps1 -TensorRTRoot C:\TensorRT-10.16.0.72 -CudaRoot C:\CUDA
+#   .\build.ps1 -OnnxOnly  # no TensorRT or CUDA SDK required
 #
 # Produces two libraries into build\bin\<Config>:
 #
 #   qualityscaler_tensorrt.dll   the TensorRT kernel (needs TensorRT + CUDA)
 #   layatrt_onnx.dll             the ONNX Runtime bridge (needs only the ORT header)
 #
-# Requires: Visual Studio 2022 (MSVC), CMake, CUDA Toolkit, TensorRT 10.x.
+# Requires: Visual Studio 2022 (MSVC), CMake; CUDA/TensorRT unless -OnnxOnly.
 # The ONNX bridge is skipped, with a warning, when the ORT C API header is
 # missing; the TensorRT kernel is still built and usable.
 
@@ -17,32 +18,40 @@ param(
     [string]$CudaRoot     = "C:\CUDA",
     [string]$BuildDir     = "build",
     [string]$Config       = "Release",
-    [string]$ORTHeaderDir = ""
+    [string]$ORTHeaderDir = "",
+    [switch]$OnnxOnly
 )
 
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 
-if (-not (Test-Path (Join-Path $TensorRTRoot "include\NvInfer.h"))) {
-    throw "NvInfer.h not found under $TensorRTRoot\include"
-}
-if (-not (Test-Path (Join-Path $CudaRoot "include\cuda_runtime_api.h"))) {
-    throw "cuda_runtime_api.h not found under $CudaRoot\include"
-}
+if (-not $OnnxOnly) {
+    if (-not (Test-Path (Join-Path $TensorRTRoot "include\NvInfer.h"))) {
+        throw "NvInfer.h not found under $TensorRTRoot\include"
+    }
+    if (-not (Test-Path (Join-Path $CudaRoot "include\cuda_runtime_api.h"))) {
+        throw "cuda_runtime_api.h not found under $CudaRoot\include"
+    }
 
-Write-Host "[build] TensorRT : $TensorRTRoot"
-Write-Host "[build] CUDA     : $CudaRoot"
+    Write-Host "[build] TensorRT : $TensorRTRoot"
+    Write-Host "[build] CUDA     : $CudaRoot"
+}
 
 $cmakeArgs = @(
     "-S", $root,
     "-B", (Join-Path $root $BuildDir),
     "-G", "Visual Studio 17 2022",
-    "-A", "x64",
-    "-DTENSORRT_ROOT=$TensorRTRoot",
-    "-DCUDA_ROOT=$CudaRoot"
+    "-A", "x64"
 )
 if ($ORTHeaderDir) {
     $cmakeArgs += "-DORT_HEADER_DIR=$ORTHeaderDir"
+}
+$cmakeArgs += "-DBUILD_ONNX=ON"
+if ($OnnxOnly) {
+    $cmakeArgs += "-DBUILD_TENSORRT=OFF"
+} else {
+    $cmakeArgs += "-DBUILD_TENSORRT=ON"
+    $cmakeArgs += "-DTENSORRT_ROOT=$TensorRTRoot", "-DCUDA_ROOT=$CudaRoot"
 }
 
 cmake @cmakeArgs
@@ -58,6 +67,10 @@ if ($LASTEXITCODE -ne 0) { throw "cmake build failed" }
 $outDir = Join-Path $root "$BuildDir\bin\$Config"
 $expected = @("qualityscaler_tensorrt.dll")
 $optional = @("layatrt_onnx.dll")
+if ($OnnxOnly) {
+    $expected = @("layatrt_onnx.dll")
+    $optional = @()
+}
 
 foreach ($name in $expected) {
     $path = Join-Path $outDir $name

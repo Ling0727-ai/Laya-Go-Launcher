@@ -8,6 +8,14 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
+option(BUILD_TENSORRT "Build the TensorRT kernel (requires TensorRT and CUDA)" ON)
+option(BUILD_ONNX "Build the ONNX Runtime bridge" ON)
+
+if(NOT BUILD_TENSORRT AND NOT BUILD_ONNX)
+    message(FATAL_ERROR "Enable at least one backend: BUILD_TENSORRT or BUILD_ONNX")
+endif()
+
+if(BUILD_TENSORRT)
 # Point these at your installs, or pass -DTENSORRT_ROOT=... -DCUDA_ROOT=...
 if(NOT TENSORRT_ROOT)
     set(TENSORRT_ROOT "C:/TensorRT-10.16.0.72")
@@ -64,6 +72,9 @@ endif()
 # it, so building this needs only the C API header and never the import library;
 # a machine without ONNX Runtime can still start every binary in this repo.
 #
+endif() # BUILD_TENSORRT
+
+if(BUILD_ONNX)
 # Pass -DORT_HEADER_DIR=... when the header is not in third_party/onnxruntime.
 if(NOT ORT_HEADER_DIR)
     set(ORT_HEADER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/onnxruntime")
@@ -74,6 +85,9 @@ find_path(ORT_INCLUDE_DIR
           PATHS "${ORT_HEADER_DIR}"
           NO_DEFAULT_PATH)
 if(NOT ORT_INCLUDE_DIR)
+    if(NOT BUILD_TENSORRT)
+        message(FATAL_ERROR "ONNX-only build requires onnxruntime_c_api.h under ${ORT_HEADER_DIR}")
+    endif()
     message(WARNING
             "onnxruntime_c_api.h not found under ${ORT_HEADER_DIR}; "
             "skipping the ONNX Runtime kernel. Place the header there or pass "
@@ -94,3 +108,4 @@ else()
         target_compile_options(layatrt_onnx PRIVATE -O3)
     endif()
 endif()
+endif() # BUILD_ONNX

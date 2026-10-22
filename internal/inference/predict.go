@@ -438,6 +438,8 @@ func fixedDim(shape []int, idx int) int {
 // Predict runs every question, batching as many as the engine allows.
 func (s *Service) Predict(ctx context.Context, req Request) (Response, error) {
 	start := time.Now()
+	// Keep one calibration snapshot throughout the request, including all batches.
+	modelCfg := s.ModelConfig()
 	if len(req.Questions) == 0 {
 		return Response{}, fmt.Errorf("inference: at least one question is required")
 	}
@@ -517,7 +519,7 @@ func (s *Service) Predict(ctx context.Context, req Request) (Response, error) {
 			// The SDK does the same (t_scale = temperature_by_options[...] then
 			// logits / t_scale); skipping it gives probabilities that do not match
 			// the trained calibration, so confidence gating would be wrong.
-			scale := s.modelCfg.TemperatureFor(it.q.Type.String(), k)
+			scale := modelCfg.TemperatureFor(it.q.Type.String(), k)
 			probs, err := softmaxWithTemperature(raw[:k], scale)
 			if err != nil {
 				return Response{}, fmt.Errorf("question %q: %w", it.id, err)
